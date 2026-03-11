@@ -84,7 +84,7 @@ def main():
         sum(cast(total_price_brl AS double)) FILTER (WHERE user_id IS NULL) AS total_bot_brl_90_days,
         sum(cast(total_price_brl AS double)) AS total_brl_90_days
         FROM asksuite_control.public_reservations
-        WHERE try(date_parse(reservation_date, '%Y-%m-%d %H:%i:%s.%f')) >= date_add('month', -3, current_date)
+        WHERE reservation_date >= date_add('month', -3, current_date)
         GROUP BY company_id
         ORDER BY total_brl_90_days DESC
         """
