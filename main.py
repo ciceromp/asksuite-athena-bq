@@ -163,7 +163,7 @@ ORDER BY 1;
         WHERE c.approved = true
         AND c.churn = false
         AND c.has_askflow = true
-        AND ac.churned != false
+        AND ac.churned != true
         ORDER BY c.company_id;
         """
 
