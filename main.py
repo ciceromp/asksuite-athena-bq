@@ -137,7 +137,7 @@ ORDER BY 1;
                 SUM(count_site)    OVER w AS cum_ia,
                 SUM(count_whatsapp) OVER w AS cum_whatsapp,
                 SUM(count_voice)   OVER w AS cum_voip
-            FROM mat.daily_company_indicators
+            FROM mat_daily_company_indicators
             WINDOW w AS (PARTITION BY company_id ORDER BY grouped_date)
         )
         SELECT
