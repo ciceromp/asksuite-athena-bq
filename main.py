@@ -153,17 +153,19 @@ ORDER BY 1;
         query5 = """
         SELECT
             c.company_id,
-            app.name                    AS askflow_plan_name,
-            ac.approved_at              AS askflow_approved_at,
+            app.name AS askflow_plan_name,
+            ac.approved_at AS askflow_approved_at,
             ac.churned,
             ac.churned_at
-        FROM contracts c
-        JOIN askflow_contract ac ON ac.askflow_contract_id = c.askflow_contract_id
-        JOIN askflow_pricing_plan app ON app.askflow_pricing_plan_id = ac.askflow_pricing_plan_id
-        WHERE c.approved = true
-        AND c.churn = false
-        AND c.has_askflow = true
-        AND ac.churned != true
+        FROM sales_daily.public_contracts c
+        JOIN sales_daily.public_askflow_contract ac
+            ON ac.askflow_contract_id = c.askflow_contract_id
+        JOIN sales_daily.public_askflow_pricing_plan app
+            ON app.askflow_pricing_plan_id = ac.askflow_pricing_plan_id
+        WHERE c.approved = TRUE
+        AND c.churn = FALSE
+        AND c.has_askflow = TRUE
+        AND (ac.churned = FALSE OR ac.churned IS NULL)
         ORDER BY c.company_id;
         """
 
@@ -190,7 +192,7 @@ ORDER BY 1;
         )
 
         run_athena_to_bq(
-            query5, "asksuite_sales_public",
+            query5, "sales_daily",
             "s3://asksuite-athena-results/athena-temp/",
             "asksuite-salesops.Contracts.askflow_contracts"
         )
