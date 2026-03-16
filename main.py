@@ -129,6 +129,44 @@ FROM w_reservations w
 ORDER BY 1;
         """
 
+        query4 = """
+        WITH cumulative AS (
+            SELECT
+                company_id,
+                grouped_date,
+                SUM(count_site)    OVER w AS cum_ia,
+                SUM(count_whatsapp) OVER w AS cum_whatsapp,
+                SUM(count_voice)   OVER w AS cum_voip
+            FROM mat.daily_company_indicators
+            WINDOW w AS (PARTITION BY company_id ORDER BY grouped_date)
+        )
+        SELECT
+            company_id,
+            MIN(grouped_date) FILTER (WHERE cum_ia        >= 7) AS ia_activation_date,
+            MIN(grouped_date) FILTER (WHERE cum_whatsapp   >= 7) AS whatsapp_activation_date,
+            MIN(grouped_date) FILTER (WHERE cum_voip       >= 7) AS voip_phone_activation_date
+        FROM cumulative
+        GROUP BY company_id
+        ORDER BY company_id;
+        """
+
+        query5 = """
+        SELECT
+            c.company_id,
+            app.name                    AS askflow_plan_name,
+            ac.approved_at              AS askflow_approved_at,
+            ac.churned,
+            ac.churned_at
+        FROM contracts c
+        JOIN askflow_contract ac ON ac.askflow_contract_id = c.askflow_contract_id
+        JOIN askflow_pricing_plan app ON app.askflow_pricing_plan_id = ac.askflow_pricing_plan_id
+        WHERE c.approved = true
+        AND c.churn = false
+        AND c.has_askflow = true
+        AND ac.churned IS NOT TRUE
+        ORDER BY c.company_id;
+        """
+
         run_athena_to_bq(
             query1, "datalake",
             "s3://asksuite-athena-results/athena-temp/",
@@ -143,6 +181,18 @@ ORDER BY 1;
             query3, "asksuite_control",
             "s3://asksuite-athena-results/athena-temp/",
             "asksuite-salesops.Silver.motores_de_reserva_com_pixel_homologado"
+        )
+
+        run_athena_to_bq(
+        query4, "asksuite_control",
+        "s3://asksuite-athena-results/athena-temp/",
+        "asksuite-salesops.Contracts.company_activation_dates"
+        )
+
+        run_athena_to_bq(
+            query5, "asksuite_sales",
+            "s3://asksuite-athena-results/athena-temp/",
+            "asksuite-salesops.Contracts.askflow_contracts"
         )
 
         print("Execução concluída com sucesso")
