@@ -190,7 +190,7 @@ ORDER BY 1;
         )
 
         run_athena_to_bq(
-            query5, "asksuite_sales",
+            query5, "asksuite_sales_public",
             "s3://asksuite-athena-results/athena-temp/",
             "asksuite-salesops.Contracts.askflow_contracts"
         )
