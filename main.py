@@ -162,10 +162,10 @@ ORDER BY 1;
             ON ac.askflow_contract_id = c.askflow_contract_id
         JOIN sales_daily.public_askflow_pricing_plan app
             ON app.askflow_pricing_plan_id = ac.askflow_pricing_plan_id
-        WHERE c.approved = TRUE
-        AND c.churn = FALSE
-        AND c.has_askflow = TRUE
-        AND (ac.churned = FALSE OR ac.churned IS NULL)
+            WHERE c.approved = 'true'
+            AND c.churn = 'false'
+            AND c.has_askflow = 'true'
+            AND (ac.churned = 'false' OR ac.churned IS NULL)
         ORDER BY c.company_id;
         """
 
