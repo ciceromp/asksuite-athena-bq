@@ -169,7 +169,7 @@ ORDER BY 1;
         ORDER BY c.company_id;
         """
 
-        query6 = """
+        query6 = query6 = """
         SELECT tb.company_id,
             tb.product,
             tb.activation_dt,
@@ -182,7 +182,7 @@ ORDER BY 1;
         FROM (
             SELECT dci.company_id,
                 'bot' AS product,
-                max(dci.grouped_date) AS activation_dt
+                min(dci.grouped_date) AS activation_dt
             FROM asksuite_control.mat_daily_company_indicators dci
             WHERE dci.count_conversations > 1
             GROUP BY dci.company_id
@@ -212,10 +212,11 @@ ORDER BY 1;
             SELECT
                 json_extract_scalar(a.external_ids, '$.0') AS company_id,
                 'WhatsApp Credits' AS product,
-                cast(w.created_at AS timestamp) AS activation_dt
+                min(cast(w.created_at AS timestamp)) AS activation_dt
             FROM credits_daily.public_en_wallet w
             JOIN credits_daily.public_en_account a ON a.id_account = w.id_account
             WHERE w.id_wallet_type = 2 AND w.status = 'active'
+            GROUP BY json_extract_scalar(a.external_ids, '$.0')
         ) tb
         LEFT JOIN asksuite_control.public_companies ON tb.company_id = public_companies.company_id
         LEFT JOIN sales_daily.public_contracts ON public_contracts.id = cast(json_extract_scalar(public_companies.company_contracts, '$.0.contractId') AS bigint)
