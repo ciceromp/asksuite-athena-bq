@@ -169,6 +169,60 @@ ORDER BY 1;
         ORDER BY c.company_id;
         """
 
+        query6 = """
+        SELECT tb.company_id,
+            tb.product,
+            tb.activation_dt,
+            json_extract_scalar(public_companies.company_contracts, '$.0.contractId') AS contract_id,
+            public_contracts.business_name,
+            public_contracts.company_name,
+            public_contracts.cnpj,
+            public_countries.country_name,
+            public_countries.initials AS country_initials
+        FROM (
+            SELECT dci.company_id,
+                'bot' AS product,
+                max(dci.grouped_date) AS activation_dt
+            FROM asksuite_control.mat_daily_company_indicators dci
+            WHERE dci.count_conversations > 1
+            GROUP BY dci.company_id
+            UNION
+            SELECT dci.company_id,
+                'WhatsApp' AS product,
+                min(dci.grouped_date) AS activation_dt
+            FROM asksuite_control.mat_daily_company_indicators dci
+            JOIN asksuite_control.public_companies companies_1 ON dci.company_id = companies_1.company_id
+            WHERE dci.count_whatsapp > 0 AND NULLIF(json_extract_scalar(companies_1.json, '$.whatsAppNumberGupshup'), '') IS NOT NULL
+            GROUP BY dci.company_id
+            UNION
+            SELECT dci.company_id,
+                'Voip' AS product,
+                min(dci.grouped_date) AS activation_dt
+            FROM asksuite_control.mat_daily_company_indicators dci
+            WHERE dci.count_voice > 0
+            GROUP BY dci.company_id
+            UNION
+            SELECT tl.company_id,
+                'Askflow' AS product,
+                min(tl.created_at) AS activation_dt
+            FROM asksuite_control.public_transmission_list tl
+            WHERE tl.name = 'flow' AND tl.status = 'SENT'
+            GROUP BY tl.company_id
+            UNION
+            SELECT
+                json_extract_scalar(a.external_ids, '$.0') AS company_id,
+                'WhatsApp Credits' AS product,
+                cast(w.created_at AS timestamp) AS activation_dt
+            FROM credits_daily.public_en_wallet w
+            JOIN credits_daily.public_en_account a ON a.id_account = w.id_account
+            WHERE w.id_wallet_type = 2 AND w.status = 'active'
+        ) tb
+        LEFT JOIN asksuite_control.public_companies ON tb.company_id = public_companies.company_id
+        LEFT JOIN sales_daily.public_contracts ON public_contracts.id = cast(json_extract_scalar(public_companies.company_contracts, '$.0.contractId') AS bigint)
+        LEFT JOIN sales_daily.public_countries ON public_contracts.country_id = public_countries.id
+        ORDER BY activation_dt DESC
+        """
+
         run_athena_to_bq(
             query1, "datalake",
             "s3://asksuite-athena-results/athena-temp/",
@@ -195,6 +249,12 @@ ORDER BY 1;
             query5, "sales_daily",
             "s3://asksuite-athena-results/athena-temp/",
             "asksuite-salesops.Contracts.askflow_contracts"
+        )
+
+        run_athena_to_bq(
+            query6, "asksuite_control",
+            "s3://asksuite-athena-results/athena-temp/",
+            "asksuite-salesops.Silver.mat_activation_dates_per_product"
         )
 
         print("Execução concluída com sucesso")
