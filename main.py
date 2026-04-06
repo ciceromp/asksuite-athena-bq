@@ -169,7 +169,7 @@ ORDER BY 1;
         ORDER BY c.company_id;
         """
 
-        query6 = query6 = """
+        query6 = """
         SELECT tb.company_id,
             tb.product,
             tb.activation_dt,
@@ -204,7 +204,7 @@ ORDER BY 1;
             UNION
             SELECT tl.company_id,
                 'Askflow' AS product,
-                min(tl.created_at) AS activation_dt
+                cast(min(tl.created_at) AS date) AS activation_dt
             FROM asksuite_control.public_transmission_list tl
             WHERE tl.name = 'flow' AND tl.status = 'SENT'
             GROUP BY tl.company_id
@@ -212,7 +212,7 @@ ORDER BY 1;
             SELECT
                 json_extract_scalar(a.external_ids, '$.0') AS company_id,
                 'WhatsApp Credits' AS product,
-                min(cast(w.created_at AS timestamp)) AS activation_dt
+                cast(min(w.created_at) AS date) AS activation_dt
             FROM credits_daily.public_en_wallet w
             JOIN credits_daily.public_en_account a ON a.id_account = w.id_account
             WHERE w.id_wallet_type = 2 AND w.status = 'active'
