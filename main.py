@@ -180,39 +180,38 @@ ORDER BY 1;
             public_countries.country_name,
             public_countries.initials AS country_initials
         FROM (
-            SELECT dci.company_id,
-                'bot' AS product,
-                min(dci.grouped_date) AS activation_dt
+            SELECT cast(dci.company_id AS varchar) AS company_id,
+                cast('bot' AS varchar) AS product,
+                cast(min(dci.grouped_date) AS varchar) AS activation_dt
             FROM asksuite_control.mat_daily_company_indicators dci
             WHERE dci.count_conversations > 1
             GROUP BY dci.company_id
             UNION
-            SELECT dci.company_id,
-                'WhatsApp' AS product,
-                min(dci.grouped_date) AS activation_dt
+            SELECT cast(dci.company_id AS varchar) AS company_id,
+                cast('WhatsApp' AS varchar) AS product,
+                cast(min(dci.grouped_date) AS varchar) AS activation_dt
             FROM asksuite_control.mat_daily_company_indicators dci
             JOIN asksuite_control.public_companies companies_1 ON dci.company_id = companies_1.company_id
             WHERE dci.count_whatsapp > 0 AND NULLIF(json_extract_scalar(companies_1.json, '$.whatsAppNumberGupshup'), '') IS NOT NULL
             GROUP BY dci.company_id
             UNION
-            SELECT dci.company_id,
-                'Voip' AS product,
-                min(dci.grouped_date) AS activation_dt
+            SELECT cast(dci.company_id AS varchar) AS company_id,
+                cast('Voip' AS varchar) AS product,
+                cast(min(dci.grouped_date) AS varchar) AS activation_dt
             FROM asksuite_control.mat_daily_company_indicators dci
             WHERE dci.count_voice > 0
             GROUP BY dci.company_id
             UNION
-            SELECT tl.company_id,
-                'Askflow' AS product,
-                cast(min(tl.created_at) AS date) AS activation_dt
+            SELECT cast(tl.company_id AS varchar) AS company_id,
+                cast('Askflow' AS varchar) AS product,
+                cast(cast(min(tl.created_at) AS date) AS varchar) AS activation_dt
             FROM asksuite_control.public_transmission_list tl
             WHERE tl.name = 'flow' AND tl.status = 'SENT'
             GROUP BY tl.company_id
             UNION
-            SELECT
-                json_extract_scalar(a.external_ids, '$.0') AS company_id,
-                'WhatsApp Credits' AS product,
-                cast(min(w.created_at) AS date) AS activation_dt
+            SELECT cast(json_extract_scalar(a.external_ids, '$.0') AS varchar) AS company_id,
+                cast('WhatsApp Credits' AS varchar) AS product,
+                cast(cast(min(w.created_at) AS date) AS varchar) AS activation_dt
             FROM credits_daily.public_en_wallet w
             JOIN credits_daily.public_en_account a ON a.id_account = w.id_account
             WHERE w.id_wallet_type = 2 AND w.status = 'active'
