@@ -205,7 +205,7 @@ def main():
             UNION ALL
             SELECT cast(json_extract_scalar(a.external_ids, '$.0') AS varchar) AS company_id,
                 cast('WhatsApp Credits' AS varchar) AS product,
-                cast(date(date_parse(min(w.created_at), '%Y-%m-%d %H:%i:%s.%f')) AS varchar) AS activation_dt
+                cast(date(date_parse(split(min(w.created_at), '.')[1], '%Y-%m-%d %H:%i:%s')) AS varchar) AS activation_dt
             FROM credits_daily.public_en_wallet w
             JOIN credits_daily.public_en_account a ON a.id_account = w.id_account
             WHERE w.id_wallet_type = 2 AND w.status = 'active'
