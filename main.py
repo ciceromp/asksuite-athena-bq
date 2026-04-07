@@ -169,7 +169,7 @@ ORDER BY 1;
         ORDER BY c.company_id;
         """
 
-        query6 = query6 = """
+        query6 ="""
         SELECT tb.company_id,
             tb.product,
             tb.activation_dt,
