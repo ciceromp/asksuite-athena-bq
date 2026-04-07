@@ -169,7 +169,7 @@ ORDER BY 1;
         ORDER BY c.company_id;
         """
 
-        query6 = """
+        query6 = query6 = """
         SELECT tb.company_id,
             tb.product,
             tb.activation_dt,
@@ -186,7 +186,7 @@ ORDER BY 1;
             FROM asksuite_control.mat_daily_company_indicators dci
             WHERE dci.count_conversations > 1
             GROUP BY dci.company_id
-            UNION
+            UNION ALL
             SELECT cast(dci.company_id AS varchar) AS company_id,
                 cast('WhatsApp' AS varchar) AS product,
                 cast(min(dci.grouped_date) AS varchar) AS activation_dt
@@ -194,24 +194,24 @@ ORDER BY 1;
             JOIN asksuite_control.public_companies companies_1 ON dci.company_id = companies_1.company_id
             WHERE dci.count_whatsapp > 0 AND NULLIF(json_extract_scalar(companies_1.json, '$.whatsAppNumberGupshup'), '') IS NOT NULL
             GROUP BY dci.company_id
-            UNION
+            UNION ALL
             SELECT cast(dci.company_id AS varchar) AS company_id,
                 cast('Voip' AS varchar) AS product,
                 cast(min(dci.grouped_date) AS varchar) AS activation_dt
             FROM asksuite_control.mat_daily_company_indicators dci
             WHERE dci.count_voice > 0
             GROUP BY dci.company_id
-            UNION
+            UNION ALL
             SELECT cast(tl.company_id AS varchar) AS company_id,
                 cast('Askflow' AS varchar) AS product,
-                cast(cast(min(tl.created_at) AS date) AS varchar) AS activation_dt
+                cast(date(date_parse(min(tl.created_at), '%Y-%m-%d %H:%i:%s.%f')) AS varchar) AS activation_dt
             FROM asksuite_control.public_transmission_list tl
             WHERE tl.name = 'flow' AND tl.status = 'SENT'
             GROUP BY tl.company_id
-            UNION
+            UNION ALL
             SELECT cast(json_extract_scalar(a.external_ids, '$.0') AS varchar) AS company_id,
                 cast('WhatsApp Credits' AS varchar) AS product,
-                cast(cast(min(w.created_at) AS date) AS varchar) AS activation_dt
+                cast(date(date_parse(min(w.created_at), '%Y-%m-%d %H:%i:%s.%f')) AS varchar) AS activation_dt
             FROM credits_daily.public_en_wallet w
             JOIN credits_daily.public_en_account a ON a.id_account = w.id_account
             WHERE w.id_wallet_type = 2 AND w.status = 'active'
