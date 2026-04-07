@@ -91,52 +91,46 @@ def main():
 
         query3 = """
         WITH w_reservations AS (
-    SELECT
-        r.booking_engine,
-        MIN(r.created_at) AS primeira_reserva,
-        MAX(r.created_at) AS ultima_reserva,
-        COUNT(*) AS count_reservas,
-        COUNT(DISTINCT r.company_id) AS count_empresas,
-        array_agg(DISTINCT r.company_id) AS array_empresas,
-
-        COUNT(DISTINCT CASE 
-            WHEN COALESCE(json_extract_scalar(c.json, '$.disabled'), 'false') = 'false'
-            THEN r.company_id
-        END) AS count_empresas_ativas,
-
-        SUM(CAST(r.total_price AS DOUBLE)) AS total_vendido
-
-    FROM asksuite_control.public_reservations r
-    JOIN asksuite_control.public_companies c
-        ON r.company_id = c.company_id
-
-    WHERE r.company_id NOT LIKE '%.%'
-      AND r.id_pixel_event IS NOT NULL
-
-    GROUP BY r.booking_engine
-)
-
-SELECT
-    COALESCE(w.booking_engine, 'Não identificado') AS motor_de_reservas,
-    w.primeira_reserva,
-    w.ultima_reserva,
-    COALESCE(w.count_reservas, 0) AS count_reservas,
-    COALESCE(w.count_empresas, 0) AS count_empresas,
-    w.array_empresas,
-    COALESCE(w.count_empresas_ativas, 0) AS count_empresas_ativas,
-    COALESCE(w.total_vendido, 0) AS total_vendido
-FROM w_reservations w
-ORDER BY 1;
+            SELECT
+                r.booking_engine,
+                MIN(r.created_at) AS primeira_reserva,
+                MAX(r.created_at) AS ultima_reserva,
+                COUNT(*) AS count_reservas,
+                COUNT(DISTINCT r.company_id) AS count_empresas,
+                array_agg(DISTINCT r.company_id) AS array_empresas,
+                COUNT(DISTINCT CASE
+                    WHEN COALESCE(json_extract_scalar(c.json, '$.disabled'), 'false') = 'false'
+                    THEN r.company_id
+                END) AS count_empresas_ativas,
+                SUM(CAST(r.total_price AS DOUBLE)) AS total_vendido
+            FROM asksuite_control.public_reservations r
+            JOIN asksuite_control.public_companies c
+                ON r.company_id = c.company_id
+            WHERE r.company_id NOT LIKE '%.%'
+              AND r.id_pixel_event IS NOT NULL
+            GROUP BY r.booking_engine
+        )
+        SELECT
+            COALESCE(w.booking_engine, 'Não identificado') AS motor_de_reservas,
+            w.primeira_reserva,
+            w.ultima_reserva,
+            COALESCE(w.count_reservas, 0) AS count_reservas,
+            COALESCE(w.count_empresas, 0) AS count_empresas,
+            w.array_empresas,
+            COALESCE(w.count_empresas_ativas, 0) AS count_empresas_ativas,
+            COALESCE(w.total_vendido, 0) AS total_vendido
+        FROM w_reservations w
+        ORDER BY 1;
         """
 
         query4 = """
         WITH cumulative AS (
             SELECT
                 company_id,
-                grouped_date,
-                SUM(count_site)    OVER w AS cum_ia,
+                date(grouped_date) AS grouped_date,
+                SUM(count_site)     OVER w AS cum_ia,
                 SUM(count_whatsapp) OVER w AS cum_whatsapp,
-                SUM(count_voice)   OVER w AS cum_voip
+                SUM(count_voice)    OVER w AS cum_voip
             FROM mat_daily_company_indicators
             WINDOW w AS (PARTITION BY company_id ORDER BY grouped_date)
         )
@@ -162,10 +156,10 @@ ORDER BY 1;
             ON ac.askflow_contract_id = c.askflow_contract_id
         JOIN sales_daily.public_askflow_pricing_plan app
             ON app.askflow_pricing_plan_id = ac.askflow_pricing_plan_id
-            WHERE c.approved = 'true'
-            AND c.churn = 'false'
-            AND c.has_askflow = 'true'
-            AND (ac.churned = 'false' OR ac.churned IS NULL)
+        WHERE c.approved = 'true'
+          AND c.churn = 'false'
+          AND c.has_askflow = 'true'
+          AND (ac.churned = 'false' OR ac.churned IS NULL)
         ORDER BY c.company_id;
         """
 
@@ -182,14 +176,14 @@ ORDER BY 1;
         FROM (
             SELECT cast(dci.company_id AS varchar) AS company_id,
                 cast('bot' AS varchar) AS product,
-                cast(min(dci.grouped_date) AS varchar) AS activation_dt
+                cast(date(min(dci.grouped_date)) AS varchar) AS activation_dt
             FROM asksuite_control.mat_daily_company_indicators dci
             WHERE dci.count_conversations > 1
             GROUP BY dci.company_id
             UNION ALL
             SELECT cast(dci.company_id AS varchar) AS company_id,
                 cast('WhatsApp' AS varchar) AS product,
-                cast(min(dci.grouped_date) AS varchar) AS activation_dt
+                cast(date(min(dci.grouped_date)) AS varchar) AS activation_dt
             FROM asksuite_control.mat_daily_company_indicators dci
             JOIN asksuite_control.public_companies companies_1 ON dci.company_id = companies_1.company_id
             WHERE dci.count_whatsapp > 0 AND NULLIF(json_extract_scalar(companies_1.json, '$.whatsAppNumberGupshup'), '') IS NOT NULL
@@ -197,7 +191,7 @@ ORDER BY 1;
             UNION ALL
             SELECT cast(dci.company_id AS varchar) AS company_id,
                 cast('Voip' AS varchar) AS product,
-                cast(min(dci.grouped_date) AS varchar) AS activation_dt
+                cast(date(min(dci.grouped_date)) AS varchar) AS activation_dt
             FROM asksuite_control.mat_daily_company_indicators dci
             WHERE dci.count_voice > 0
             GROUP BY dci.company_id
@@ -238,19 +232,16 @@ ORDER BY 1;
             "s3://asksuite-athena-results/athena-temp/",
             "asksuite-salesops.Silver.motores_de_reserva_com_pixel_homologado"
         )
-
         run_athena_to_bq(
-        query4, "asksuite_control",
-        "s3://asksuite-athena-results/athena-temp/",
-        "asksuite-salesops.Contracts.company_activation_dates"
+            query4, "asksuite_control",
+            "s3://asksuite-athena-results/athena-temp/",
+            "asksuite-salesops.Contracts.company_activation_dates"
         )
-
         run_athena_to_bq(
             query5, "sales_daily",
             "s3://asksuite-athena-results/athena-temp/",
             "asksuite-salesops.Contracts.askflow_contracts"
         )
-
         run_athena_to_bq(
             query6, "asksuite_control",
             "s3://asksuite-athena-results/athena-temp/",
