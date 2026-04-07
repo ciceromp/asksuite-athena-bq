@@ -127,7 +127,7 @@ def main():
         WITH cumulative AS (
             SELECT
                 company_id,
-                date(date_parse(grouped_date, '%Y-%m-%d %H:%i:%s.%f')) AS grouped_date,
+                grouped_date,
                 SUM(count_site)     OVER w AS cum_ia,
                 SUM(count_whatsapp) OVER w AS cum_whatsapp,
                 SUM(count_voice)    OVER w AS cum_voip
@@ -163,7 +163,7 @@ def main():
         ORDER BY c.company_id;
         """
 
-        query6 = """
+        query6 = query6 = """
         SELECT tb.company_id,
             tb.product,
             tb.activation_dt,
@@ -176,14 +176,14 @@ def main():
         FROM (
             SELECT cast(dci.company_id AS varchar) AS company_id,
                 cast('bot' AS varchar) AS product,
-                cast(date(date_parse(min(dci.grouped_date), '%Y-%m-%d %H:%i:%s.%f')) AS varchar) AS activation_dt
+                cast(min(dci.grouped_date) AS varchar) AS activation_dt
             FROM asksuite_control.mat_daily_company_indicators dci
             WHERE dci.count_conversations > 1
             GROUP BY dci.company_id
             UNION ALL
             SELECT cast(dci.company_id AS varchar) AS company_id,
                 cast('WhatsApp' AS varchar) AS product,
-                cast(date(date_parse(min(dci.grouped_date), '%Y-%m-%d %H:%i:%s.%f')) AS varchar) AS activation_dt
+                cast(min(dci.grouped_date) AS varchar) AS activation_dt
             FROM asksuite_control.mat_daily_company_indicators dci
             JOIN asksuite_control.public_companies companies_1 ON dci.company_id = companies_1.company_id
             WHERE dci.count_whatsapp > 0 AND NULLIF(json_extract_scalar(companies_1.json, '$.whatsAppNumberGupshup'), '') IS NOT NULL
@@ -191,14 +191,14 @@ def main():
             UNION ALL
             SELECT cast(dci.company_id AS varchar) AS company_id,
                 cast('Voip' AS varchar) AS product,
-                cast(date(date_parse(min(dci.grouped_date), '%Y-%m-%d %H:%i:%s.%f')) AS varchar) AS activation_dt
+                cast(min(dci.grouped_date) AS varchar) AS activation_dt
             FROM asksuite_control.mat_daily_company_indicators dci
             WHERE dci.count_voice > 0
             GROUP BY dci.company_id
             UNION ALL
             SELECT cast(tl.company_id AS varchar) AS company_id,
                 cast('Askflow' AS varchar) AS product,
-                cast(date(from_unixtime(to_unixtime(min(tl.created_at)))) AS varchar) AS activation_dt
+                cast(date(min(tl.created_at)) AS varchar) AS activation_dt
             FROM asksuite_control.public_transmission_list tl
             WHERE tl.name = 'flow' AND tl.status = 'SENT'
             GROUP BY tl.company_id
