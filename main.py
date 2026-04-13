@@ -163,7 +163,7 @@ def main():
         ORDER BY c.company_id;
         """
 
-        query6 = query6 = """
+        query6 = """
         SELECT tb.company_id,
             tb.product,
             tb.activation_dt,
@@ -217,6 +217,105 @@ def main():
         ORDER BY activation_dt DESC
         """
 
+        # query nova — vendas por empresa com janelas 30d e 90d
+        # adaptações Athena: sem LATERAL JOIN, sem FILTER(WHERE) no COUNT/SUM
+        # booking_engine da última reserva resolvido via subconsulta correlacionada no SELECT
+        query7 = """
+        WITH w_last_booking_engine AS (
+            SELECT
+                company_id,
+                booking_engine
+            FROM (
+                SELECT
+                    company_id,
+                    booking_engine,
+                    ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY reservation_date DESC) AS rn
+                FROM asksuite_control.public_reservations
+                WHERE CAST(total_price_brl AS DOUBLE) < 100000
+            ) ranked
+            WHERE rn = 1
+        )
+        SELECT
+            c.company_id,
+            BOOL_OR(r.id_pixel_event IS NOT NULL)                        AS tem_pixel,
+            lb.booking_engine                                             AS booking_engine,
+
+            COUNT(r.total_price_brl)                                     AS total_vendas,
+            SUM(CAST(r.total_price_brl AS DOUBLE))                       AS valor_total_vendas,
+
+            COUNT(CASE
+                WHEN date_diff('day', date(r.reservation_date), current_date) <= 30
+                THEN r.total_price_brl END)                              AS vendas_30d,
+            SUM(CASE
+                WHEN date_diff('day', date(r.reservation_date), current_date) <= 30
+                THEN CAST(r.total_price_brl AS DOUBLE) ELSE 0 END)      AS receita_30d,
+
+            COUNT(CASE
+                WHEN date_diff('day', date(r.reservation_date), current_date) <= 90
+                THEN r.total_price_brl END)                              AS vendas_90d,
+            SUM(CASE
+                WHEN date_diff('day', date(r.reservation_date), current_date) <= 90
+                THEN CAST(r.total_price_brl AS DOUBLE) ELSE 0 END)      AS receita_90d
+
+        FROM asksuite_control.public_companies c
+        LEFT JOIN asksuite_control.public_reservations r
+            ON r.company_id = c.company_id
+            AND CAST(r.total_price_brl AS DOUBLE) < 100000
+        LEFT JOIN w_last_booking_engine lb
+            ON lb.company_id = c.company_id
+
+        GROUP BY c.company_id, lb.booking_engine
+        ORDER BY receita_30d DESC NULLS LAST, vendas_30d DESC, c.company_id
+        """
+
+        # query nova — canais e atendimento humano no mês do churn
+        query8 = """
+        WITH w_companies AS (
+            SELECT
+                company_id,
+                CAST(churned_at AS TIMESTAMP) AS churn_requested_at
+            FROM sales_daily.public_contracts
+            WHERE DATE(churned_at) >= date_add('day', -30, current_date)
+        ),
+        w_channels AS (
+            SELECT
+                company_id,
+                SUM(count_site)                    AS count_chatweb,
+                SUM(count_whatsapp)                AS count_whatsapp,
+                CASE WHEN SUM(count_site) > 0      THEN true ELSE false END AS active_chatweb,
+                CASE WHEN SUM(count_whatsapp) > 0  THEN true ELSE false END AS active_whatsapp,
+                CASE WHEN SUM(count_instagram) > 0 THEN true ELSE false END AS active_instagram,
+                CASE WHEN SUM(count_facebook) > 0  THEN true ELSE false END AS active_facebook,
+                CASE WHEN SUM(count_email) > 0     THEN true ELSE false END AS active_email,
+                CASE WHEN SUM(count_voice) > 0     THEN true ELSE false END AS active_voice,
+                CASE WHEN SUM(count_booking) > 0   THEN true ELSE false END AS active_booking,
+                CASE WHEN SUM(count_expedia) > 0   THEN true ELSE false END AS active_expedia,
+                CASE WHEN SUM(count_tiktok) > 0    THEN true ELSE false END AS active_tiktok
+            FROM asksuite_control.mat_daily_company_indicators
+            JOIN w_companies USING (company_id)
+            WHERE date_trunc('month', CAST(grouped_date AS TIMESTAMP)) = date_trunc('month', churn_requested_at)
+            GROUP BY company_id
+        ),
+        w_human AS (
+            SELECT
+                company_id,
+                COUNT(*) FILTER (WHERE has_human_attendance) AS has_human_attendance_days
+            FROM (
+                SELECT
+                    company_id,
+                    grouped_date,
+                    CASE WHEN SUM(count_human) > 0 THEN true ELSE false END AS has_human_attendance
+                FROM asksuite_control.mat_daily_company_indicators
+                JOIN w_companies USING (company_id)
+                WHERE date_trunc('month', CAST(grouped_date AS TIMESTAMP)) = date_trunc('month', churn_requested_at)
+                GROUP BY company_id, grouped_date
+            ) t0
+            GROUP BY company_id
+        )
+        SELECT * FROM w_channels
+        LEFT JOIN w_human USING (company_id)
+        """
+
         run_athena_to_bq(
             query1, "datalake",
             "s3://asksuite-athena-results/athena-temp/",
@@ -235,7 +334,7 @@ def main():
         run_athena_to_bq(
             query4, "asksuite_control",
             "s3://asksuite-athena-results/athena-temp/",
-            "asksuite-salesops.Contracts.company_activation_dates"
+            "asksuite-salesops.Silver.company_activation_dates"
         )
         run_athena_to_bq(
             query5, "sales_daily",
@@ -246,6 +345,16 @@ def main():
             query6, "asksuite_control",
             "s3://asksuite-athena-results/athena-temp/",
             "asksuite-salesops.Silver.mat_activation_dates_per_product"
+        )
+        run_athena_to_bq(
+            query7, "asksuite_control",
+            "s3://asksuite-athena-results/athena-temp/",
+            "asksuite-salesops.Silver.vendas_por_empresa"
+        )
+        run_athena_to_bq(
+            query8, "asksuite_control",
+            "s3://asksuite-athena-results/athena-temp/",
+            "asksuite-salesops.Silver.churn_canais_e_atendimento"
         )
 
         print("Execução concluída com sucesso")
