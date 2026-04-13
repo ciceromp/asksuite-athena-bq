@@ -37,6 +37,9 @@ def run_athena_to_bq(query, database, s3_output, bq_table):
 
     s3_obj = s3.get_object(Bucket=bucket, Key=key)
     df = pd.read_csv(s3_obj["Body"])
+    # arredonda todas as colunas float para 2 casas
+    float_cols = df.select_dtypes(include=['float64']).columns
+    df[float_cols] = df[float_cols].round(2)
     print(f"→ retornou {df.shape[0]} linhas.")
 
     job = bq_client.load_table_from_dataframe(
