@@ -274,12 +274,13 @@ def main():
         # query nova — canais e atendimento humano no mês do churn
         query8 = """
         WITH w_companies AS (
-            SELECT
-                company_id,
-                CAST(churned_at AS TIMESTAMP) AS churn_requested_at
-            FROM sales_daily.public_contracts
-            WHERE DATE(churned_at) >= date_add('day', -30, current_date)
+        SELECT
+            company_id,
+            CAST(churned_at AS TIMESTAMP) AS churn_requested_at
+        FROM sales_daily.public_contracts
+        WHERE churned_at IS NOT NULL
         ),
+
         w_channels AS (
             SELECT
                 company_id,
@@ -299,6 +300,7 @@ def main():
             WHERE date_trunc('month', CAST(grouped_date AS TIMESTAMP)) = date_trunc('month', churn_requested_at)
             GROUP BY company_id
         ),
+
         w_human AS (
             SELECT
                 company_id,
@@ -315,6 +317,7 @@ def main():
             ) t0
             GROUP BY company_id
         )
+
         SELECT * FROM w_channels
         LEFT JOIN w_human USING (company_id)
         """
