@@ -297,7 +297,7 @@ def main():
                 CASE WHEN SUM(count_tiktok) > 0    THEN true ELSE false END AS active_tiktok
             FROM asksuite_control.mat_daily_company_indicators
             JOIN w_companies USING (company_id)
-            WHERE CAST(grouped_date AS TIMESTAMP) >= churn_requested_at - INTERVAL '30' DAY
+            WHERE CAST(grouped_date AS TIMESTAMP) >= churn_requested_at - INTERVAL '90' DAY
               AND CAST(grouped_date AS TIMESTAMP) <  churn_requested_at
             GROUP BY company_id
         ),
