@@ -336,8 +336,8 @@ def main():
             ch.active_tiktok,
             h.has_human_attendance_days
         FROM w_companies c
-        LEFT JOIN w_channels ch USING (company_id)
-        LEFT JOIN w_human   h  USING (company_id)
+        LEFT JOIN w_channels ch ON c.company_id = ch.company_id
+        LEFT JOIN w_human   h  ON c.company_id = h.company_id 
         """
 
         run_athena_to_bq(
