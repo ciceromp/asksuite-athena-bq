@@ -168,56 +168,99 @@ def main():
 
         query6 = """
         SELECT tb.company_id,
-            tb.product,
-            tb.activation_dt,
-            json_extract_scalar(public_companies.company_contracts, '$.0.contractId') AS contract_id,
-            public_contracts.business_name,
-            public_contracts.company_name,
-            public_contracts.cnpj,
-            public_countries.country_name,
-            public_countries.initials AS country_initials
-        FROM (
-            SELECT cast(dci.company_id AS varchar) AS company_id,
-                cast('bot' AS varchar) AS product,
-                cast(min(dci.grouped_date) AS varchar) AS activation_dt
-            FROM asksuite_control.mat_daily_company_indicators dci
-            WHERE dci.count_conversations > 1
-            GROUP BY dci.company_id
-            UNION ALL
-            SELECT cast(dci.company_id AS varchar) AS company_id,
-                cast('WhatsApp' AS varchar) AS product,
-                cast(min(dci.grouped_date) AS varchar) AS activation_dt
-            FROM asksuite_control.mat_daily_company_indicators dci
-            JOIN asksuite_control.public_companies companies_1 ON dci.company_id = companies_1.company_id
-            WHERE dci.count_whatsapp > 0 AND NULLIF(json_extract_scalar(companies_1.json, '$.whatsAppNumberGupshup'), '') IS NOT NULL
-            GROUP BY dci.company_id
-            UNION ALL
-            SELECT cast(dci.company_id AS varchar) AS company_id,
-                cast('Voip' AS varchar) AS product,
-                cast(min(dci.grouped_date) AS varchar) AS activation_dt
-            FROM asksuite_control.mat_daily_company_indicators dci
-            WHERE dci.count_voice > 0
-            GROUP BY dci.company_id
-            UNION ALL
-            SELECT cast(tl.company_id AS varchar) AS company_id,
-                cast('Askflow' AS varchar) AS product,
-                cast(date(min(tl.created_at)) AS varchar) AS activation_dt
-            FROM asksuite_control.public_transmission_list tl
-            WHERE tl.name = 'flow' AND tl.status = 'SENT'
-            GROUP BY tl.company_id
-            UNION ALL
-            SELECT cast(json_extract_scalar(a.external_ids, '$.0') AS varchar) AS company_id,
-                cast('WhatsApp Credits' AS varchar) AS product,
-                cast(date(date_parse(split(min(w.created_at), '.')[1], '%Y-%m-%d %H:%i:%s')) AS varchar) AS activation_dt
-            FROM credits_daily.public_en_wallet w
-            JOIN credits_daily.public_en_account a ON a.id_account = w.id_account
-            WHERE w.id_wallet_type = 2 AND w.status = 'active'
-            GROUP BY json_extract_scalar(a.external_ids, '$.0')
-        ) tb
-        LEFT JOIN asksuite_control.public_companies ON tb.company_id = public_companies.company_id
-        LEFT JOIN sales_daily.public_contracts ON public_contracts.id = cast(json_extract_scalar(public_companies.company_contracts, '$.0.contractId') AS bigint)
-        LEFT JOIN sales_daily.public_countries ON public_contracts.country_id = public_countries.id
-        ORDER BY activation_dt DESC
+       tb.product,
+       tb.activation_dt,
+       json_extract_scalar(public_companies.company_contracts, '$.0.contractId') AS contract_id,
+       public_contracts.business_name,
+       public_contracts.company_name,
+       public_contracts.cnpj,
+       public_countries.country_name,
+       public_countries.initials AS country_initials
+FROM (
+    SELECT
+        cast(ac.company_id AS varchar) AS company_id,
+        cast('bot' AS varchar) AS product,
+        cast(date(cast(min(a.created_at) AS timestamp)) AS varchar) AS activation_dt
+    FROM livechat_daily.public_attendance a
+    JOIN livechat_daily.public_attendance_conversation ac ON a.attendance_id = ac.attendance_id
+    JOIN livechat_daily.public_contact_channel cc ON cc.contact_channel_id = ac.contact_channel_id
+    WHERE cc.channel = 'chat_web'
+    GROUP BY ac.company_id
+    HAVING count(DISTINCT a.attendance_id) > 1
+
+    UNION ALL
+
+    SELECT
+        cast(ac.company_id AS varchar) AS company_id,
+        cast('WhatsApp' AS varchar) AS product,
+        cast(date(cast(min(a.created_at) AS timestamp)) AS varchar) AS activation_dt
+    FROM livechat_daily.public_attendance a
+    JOIN livechat_daily.public_attendance_conversation ac ON a.attendance_id = ac.attendance_id
+    JOIN livechat_daily.public_contact_channel cc ON cc.contact_channel_id = ac.contact_channel_id
+    WHERE cc.channel = 'whatsapp'
+    GROUP BY ac.company_id
+
+    UNION ALL
+
+    SELECT
+        cast(dci.company_id AS varchar) AS company_id,
+        cast('Voip' AS varchar) AS product,
+        cast(min(dci.grouped_date) AS varchar) AS activation_dt
+    FROM asksuite_control.mat_daily_company_indicators dci
+    WHERE dci.count_voice > 0
+    GROUP BY dci.company_id
+
+    UNION ALL
+
+    -- Askflow: primeiro fluxo completo (full flow)
+    SELECT
+        replace(cast(company_id_raw AS varchar), '"', '') AS company_id,
+        cast('Askflow' AS varchar) AS product,
+        cast(date(cast(min(en_ws.created_at) AS timestamp)) AS varchar) AS activation_dt
+    FROM flow_daily.public_en_organization en_org
+    JOIN flow_daily.public_en_workflow_schedule en_ws ON en_ws.id_organization = en_org.id_organization
+    CROSS JOIN UNNEST(
+        cast(json_parse(en_org.ids_external_partner) AS array(json))
+    ) AS t(company_id_raw)
+    WHERE en_org.id_partner = 1
+      AND en_org.configuration NOT LIKE '%ignore-alerts%'
+      AND en_ws.status = 'finished'
+    GROUP BY replace(cast(company_id_raw AS varchar), '"', '')
+
+    UNION ALL
+
+    -- Askflow - Envio WA: primeiro envio de WhatsApp realizado por um fluxo
+    SELECT
+        replace(cast(company_id_raw AS varchar), '"', '') AS company_id,
+        cast('Askflow - Envio WA' AS varchar) AS product,
+        cast(date(cast(min(el.created_at) AS timestamp)) AS varchar) AS activation_dt
+    FROM flow_daily.public_en_organization en_org
+    JOIN flow_daily.public_en_app_event_log el ON el.id_organization = en_org.id_organization
+    CROSS JOIN UNNEST(
+        cast(json_parse(en_org.ids_external_partner) AS array(json))
+    ) AS t(company_id_raw)
+    WHERE en_org.id_partner = 1
+      AND en_org.configuration NOT LIKE '%ignore-alerts%'
+      AND el.id_app_event = 5
+    GROUP BY replace(cast(company_id_raw AS varchar), '"', '')
+
+    UNION ALL
+
+    SELECT
+        cast(json_extract_scalar(a.external_ids, '$.0') AS varchar) AS company_id,
+        cast('WhatsApp Credits' AS varchar) AS product,
+        cast(date(cast(min(w.created_at) AS timestamp)) AS varchar) AS activation_dt
+    FROM credits_daily.public_en_wallet w
+    JOIN credits_daily.public_en_account a ON a.id_account = w.id_account
+    WHERE w.id_wallet_type = 2
+      AND w.status = 'active'
+    GROUP BY json_extract_scalar(a.external_ids, '$.0')
+
+    ) tb
+    LEFT JOIN asksuite_control.public_companies ON tb.company_id = public_companies.company_id
+    LEFT JOIN sales_daily.public_contracts ON public_contracts.id = cast(json_extract_scalar(public_companies.company_contracts, '$.0.contractId') AS bigint)
+    LEFT JOIN sales_daily.public_countries ON public_contracts.country_id = public_countries.id
+    ORDER BY activation_dt DESC
         """
 
         # query nova — vendas por empresa com janelas 30d e 90d
@@ -350,7 +393,7 @@ def main():
         run_athena_to_bq(
             query6, "asksuite_control",
             "s3://asksuite-athena-results/athena-temp/",
-            "asksuite-salesops.Silver.mat_activation_dates_per_product"
+            "asksuite-salesops.Silver.activation_date_company_id_product"
         )
         run_athena_to_bq(
             query7, "asksuite_control",
