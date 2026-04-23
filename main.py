@@ -317,11 +317,11 @@ FROM (
         # query nova — canais e atendimento humano no mês do churn
         query8 = """
         WITH w_companies AS (
-        SELECT
-            company_id,
-            CAST(churned_at AS TIMESTAMP) AS churn_requested_at
-        FROM sales_daily.public_contracts
-        WHERE churned_at IS NOT NULL
+            SELECT
+                company_id,
+                CAST(churned_at AS TIMESTAMP) AS churn_requested_at
+            FROM sales_daily.public_contracts
+            WHERE churned_at IS NOT NULL
         ),
 
         w_channels AS (
@@ -340,7 +340,8 @@ FROM (
                 CASE WHEN SUM(count_tiktok) > 0    THEN true ELSE false END AS active_tiktok
             FROM asksuite_control.mat_daily_company_indicators
             JOIN w_companies USING (company_id)
-            WHERE date_trunc('month', CAST(grouped_date AS TIMESTAMP)) = date_trunc('month', churn_requested_at)
+            WHERE CAST(grouped_date AS TIMESTAMP) >= churn_requested_at - INTERVAL '90' DAY
+              AND CAST(grouped_date AS TIMESTAMP) <  churn_requested_at
             GROUP BY company_id
         ),
 
@@ -355,14 +356,31 @@ FROM (
                     CASE WHEN SUM(count_human) > 0 THEN true ELSE false END AS has_human_attendance
                 FROM asksuite_control.mat_daily_company_indicators
                 JOIN w_companies USING (company_id)
-                WHERE date_trunc('month', CAST(grouped_date AS TIMESTAMP)) = date_trunc('month', churn_requested_at)
+                WHERE CAST(grouped_date AS TIMESTAMP) >= churn_requested_at - INTERVAL '90' DAY
+                  AND CAST(grouped_date AS TIMESTAMP) <  churn_requested_at
                 GROUP BY company_id, grouped_date
             ) t0
             GROUP BY company_id
         )
 
-        SELECT * FROM w_channels
-        LEFT JOIN w_human USING (company_id)
+        SELECT
+            c.company_id,
+            c.churn_requested_at,
+            ch.count_chatweb,
+            ch.count_whatsapp,
+            ch.active_chatweb,
+            ch.active_whatsapp,
+            ch.active_instagram,
+            ch.active_facebook,
+            ch.active_email,
+            ch.active_voice,
+            ch.active_booking,
+            ch.active_expedia,
+            ch.active_tiktok,
+            h.has_human_attendance_days
+        FROM w_companies c
+        LEFT JOIN w_channels ch ON c.company_id = ch.company_id
+        LEFT JOIN w_human   h ON c.company_id = h.company_id 
         """
 
         run_athena_to_bq(
